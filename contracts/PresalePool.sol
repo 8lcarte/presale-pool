@@ -3,11 +3,13 @@ pragma solidity ^0.4.15;
 import "./Util.sol";
 import "./QuotaTracker.sol";
 
+
 interface ERC20 {
     function transfer(address _to, uint _value) returns (bool success);
     function balanceOf(address _owner) constant returns (uint balance);
 }
 
+/* makes fees payable per person, not sure i like this way*/
 interface FeeManager {
     function create(uint _feesPerEther, address[] _recipients);
     function sendFees() payable;
@@ -17,42 +19,52 @@ interface FeeManager {
 contract PresalePool {
     using QuotaTracker for QuotaTracker.Data;
 
+/*Defining possible states of contract
+*state is public
+*/
     enum State { Open, Failed, Paid, Refund }
     State public state;
-
+/*defining public admins as a subset of the address[] array
+and public variables for contribution*/
     address[] public admins;
 
     uint public minContribution;
     uint public maxContribution;
     uint public maxPoolBalance;
 
+/*defining participants as a subset of the address[] array*/
     address[] public participants;
-
+/** not sure **/
     bool public restricted;
-
+/* a participant has the following variables associated to it */
     struct ParticipantState {
         uint contribution;
         uint remaining;
         bool whitelisted;
         bool exists;
     }
+    /*defining that addresses have a ParticipantState*/
     mapping (address => ParticipantState) public balances;
+    /*Defining whole puool balances*/
     uint public poolContributionBalance;
     uint public poolRemainingBalance;
-
+    /*adding a public address to show where the money will go*/
     address public presaleAddress;
-
+    /**honestly not sure what this is**/
     address public refundSenderAddress;
     QuotaTracker.Data etherRefunds;
     bool public allowTokenClaiming;
     QuotaTracker.Data tokenDeposits;
 
+    /*making public the tokenContract for whatever the token is interfaces with above*/
     ERC20 public tokenContract;
 
+    /*calls the interface with FeeManger from above*/
     FeeManager public feeManager;
     uint public totalFees;
     uint public feesPerEther;
 
+    /*calling out varaibles for various events*/
     event Deposit(
         address indexed _from,
         uint _value,
@@ -109,22 +121,22 @@ contract PresalePool {
     event AddAdmin(
         address _admin
     );
-
+    /*defining admins must be the sender of a message for an OnlyAdmins call*/
     modifier onlyAdmins() {
         require(Util.contains(admins, msg.sender));
         _;
     }
-
+    /*if you want a function to call only on a certain state, use onState*/
     modifier onState(State s) {
         require(state == s);
         _;
     }
-
+    /*Only allow tokens to be claimed after state is paid*/
     modifier canClaimTokens() {
         require(state == State.Paid && allowTokenClaiming);
         _;
     }
-
+    /*define variables for presale function*/
     function PresalePool(
         address _feeManager,
         uint _feesPerEther,
@@ -133,17 +145,20 @@ contract PresalePool {
         uint _maxPoolBalance,
         address[] _admins,
         bool _restricted
+    /* add payable modifier*/
     ) payable
     {
+        /*add sender to admins -- why do that?*/
         AddAdmin(msg.sender);
         admins.push(msg.sender);
-
+        /*set variables equal to inputs */
         minContribution = _minContribution;
         maxContribution = _maxContribution;
         maxPoolBalance = _maxPoolBalance;
+        /*call validateContributionSettings function */
         validateContributionSettings();
         ContributionSettingsChanged(minContribution, maxContribution, maxPoolBalance);
-
+        
         restricted = _restricted;
         balances[msg.sender].whitelisted = true;
 
